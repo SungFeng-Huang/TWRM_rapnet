@@ -1,7 +1,7 @@
 sftp-config.json
 *.pyc
-works/*
-!works/lyrics_ptt/data
+works/*/nn_module
+/*!works/lyrics_ptt/data*/
 go_train
 *.yaml
 ssl/*
