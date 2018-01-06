@@ -134,8 +134,11 @@ class Seq2SeqModel(object):
         cell = tf.contrib.rnn.MultiRNNCell([single_cell() for _ in range(num_layers)])
 
       # The seq2seq function: we use embedding for the input and attention.
+      seq3gan = True
+      seq3_func = tf_seq2seq.embedding_attention_seq2seq2seq_gan if seq3gan else tf_seq2seq.embedding_attention_seq2seq2seq
       def seq2seq_f(encoder_inputs, decoder_inputs, feed_previous):
-        return tf_seq2seq.embedding_attention_seq2seq2seq_gan(
+        # return tf_seq2seq.embedding_attention_seq2seq2seq_gan(
+        return seq3_func(
             encoder_inputs, 
             decoder_inputs, 
             cell,
@@ -173,7 +176,7 @@ class Seq2SeqModel(object):
             self.encoder_inputs, self.decoder_inputs, targets,
             self.target_weights, buckets, lambda x, y: seq2seq_f(x, y, True),
             softmax_loss_function=softmax_loss_function,
-            seq3bool=True, seq3gan=True)
+            seq3bool=True, seq3gan=seq3gan)
         # If we use output projection, we need to project outputs for decoding.
         if output_projection is not None:
           for b in xrange(len(buckets)):
@@ -187,7 +190,7 @@ class Seq2SeqModel(object):
             self.target_weights, buckets,
             lambda x, y: seq2seq_f(x, y, False),
             softmax_loss_function=softmax_loss_function,
-            seq3bool=True, seq3gan=True)
+            seq3bool=True, seq3gan=seq3gan)
 
       # # Training outputs and losses.
       # self.outputs, self.losses, self.encoder_state = tf_seq2seq.model_with_buckets(
@@ -218,6 +221,9 @@ class Seq2SeqModel(object):
       for b in xrange(len(buckets)):
         # self.losses[b] = tf.subtract(self.losses[b], self.advantage[b])
         gradients = tf.gradients(self.losses[b], params)
+        # if seq3gan:
+            # clipped_gradients, norm = tf.clip_by_value(gradients, -0.01, 0.01)
+        # else:
         clipped_gradients, norm = tf.clip_by_global_norm(gradients,
                                                          max_gradient_norm)
         self.gradient_norms.append(norm)

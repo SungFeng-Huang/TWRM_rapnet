@@ -20,7 +20,7 @@ def params_setup(cmdline=None):
   parser.add_argument('--num_layers', type=int, default=4, help='Number of layers in the model.')
 
   parser.add_argument('--max_train_data_size', type=int, default=0, help='Limit on the size of training data (0: no limit)')
-  parser.add_argument('--steps_per_checkpoint', type=int, default=36000, help='How many training steps to do per checkpoint')
+  parser.add_argument('--steps_per_checkpoint', type=int, default=5000, help='How many training steps to do per checkpoint')
 
   # predicting params
   parser.add_argument('--beam_size', type=int, default=1, help='beam search size')

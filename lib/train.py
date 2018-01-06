@@ -46,7 +46,9 @@ def train(args):
         # Read data into buckets and compute their sizes.
         print("Reading development and training data (limit: %d)." % args.max_train_data_size)
         dev_set = data_utils.read_data(dev_data, args.buckets, reversed=args.rev_model)
+        print("Reading development and training data (limit: %d)." % args.max_train_data_size)
         train_set = data_utils.read_data(train_data, args.buckets, args.max_train_data_size, reversed=args.rev_model)
+        print("Reading development and training data (limit: %d)." % args.max_train_data_size)
         train_bucket_sizes = [len(train_set[b]) for b in xrange(len(args.buckets))]
         train_total_size = float(sum(train_bucket_sizes))
 
@@ -99,8 +101,11 @@ def train(args):
           if (current_step % 500 == 0) and (not args.reinforce_learn):
             # Print statistics for the previous epoch.
             perplexity = math.exp(loss) if loss < 300 else float('inf')
+            global_step = model.global_step.eval()
+            if global_step > 216000:
+                break
             print ("global step %d learning rate %.4f step-time %.2f perplexity %.2f @ %s" %
-                   (model.global_step.eval(), model.learning_rate.eval(), step_time, perplexity, datetime.now()))
+                   (global_step, model.learning_rate.eval(), step_time, perplexity, datetime.now()))
 
             # Decrease learning rate if no improvement was seen over last 3 times.
             if len(previous_losses) > 2 and loss > max(previous_losses[-3:]):

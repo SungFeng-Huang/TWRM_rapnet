@@ -75,6 +75,8 @@ from tensorflow.python.ops import nn_ops
 from tensorflow.python.ops import variable_scope
 from tensorflow.python.util import nest
 
+from lib.flip_gradient import flip_gradient
+
 # TODO(ebrevdo): Remove once _linear is fully deprecated.
 linear = core_rnn_cell_impl._linear  # pylint: disable=protected-access
 
@@ -1001,6 +1003,7 @@ def embedding_attention_seq2seq2seq(encoder_inputs,
    
       # Decoder.
       output_size = None
+      decoder_cell = copy.deepcopy(cell)
       if output_projection is None:
         decoder_cell = core_rnn_cell.OutputProjectionWrapper(cell, num_decoder_symbols)
         output_size = num_decoder_symbols
@@ -1155,22 +1158,27 @@ def embedding_attention_seq2seq2seq_gan(encoder_inputs,
         scope=None,
         initial_state_attention=initial_state_attention)
 
-    with variable_scope.variable_scope(
-        "discriminator", dtype=dtype) as scope:
-      dtype = scope.dtype
-
-      with variable_scope.variable_scope("layers", dtype=dtype) as inner_scope:
-          # disc_w1 = scope.get_variable("disc_w1", [cell.state_size, embedding_size], dtype=dtype)
-          # disc_b1 = scope.get_variable("disc_b1", [embedding_size], dtype=dtype)
-          # disc_w2 = scope.get_variable("disc_w2", [embedding_size, 1], dtype=dtype)
-          # disc_b2 = scope.get_variable("disc_b2", [1], dtype=dtype)
-          disc_true = linear(nn_ops.leaky_relu(
-              linear([encoder_state['enc'], encoder_state['ae_enc']], embedding_size, True)), 1, True)
-          disc_true = -1 * disc_true + array_ops.stop_gradient(2 * disc_true)
-          inner_scope.reuse_variables()
-          disc_false = linear(nn_ops.leaky_relu(
-              linear([encoder_state['enc'], encoder_state['trans']], embedding_size, True)), 1, True)
-          disc_false = -1 * disc_false + array_ops.stop_gradient(2 * disc_false)
+    flip_rate = 1
+    with variable_scope.variable_scope("discriminator_layers", dtype=dtype) as inner_scope:
+        # disc_w1 = scope.get_variable("disc_w1", [cell.state_size, embedding_size], dtype=dtype)
+        # disc_b1 = scope.get_variable("disc_b1", [embedding_size], dtype=dtype)
+        # disc_w2 = scope.get_variable("disc_w2", [embedding_size, 1], dtype=dtype)
+        # disc_b2 = scope.get_variable("disc_b2", [1], dtype=dtype)
+      enc_state = flip_gradient(array_ops.concat(list(encoder_state['enc']), 1), flip_rate)
+      trans_state = flip_gradient(array_ops.concat(list(encoder_state['trans']), 1), flip_rate)
+      ae_enc_state = flip_gradient(array_ops.concat(list(encoder_state['ae_enc']), 1), flip_rate)
+      with variable_scope.variable_scope("layer_1", dtype=dtype) as layer_scope:
+        disc_true = linear([enc_state, ae_enc_state
+            ], embedding_size, True)
+        layer_scope.reuse_variables()
+        disc_false = linear([enc_state, trans_state
+            ], embedding_size, True)
+      with variable_scope.variable_scope("layer_2", dtype=dtype) as layer_scope:
+        disc_true = linear(nn_ops.relu6(disc_true), 1, True)
+        # disc_true = -1 * disc_true + array_ops.stop_gradient(2 * disc_true)
+        layer_scope.reuse_variables()
+        disc_false = linear(nn_ops.relu6(disc_false), 1, True)
+        # disc_false = -1 * disc_false + array_ops.stop_gradient(2 * disc_false)
       # disc_enc = nn_ops.xw_plus_b(nn_ops.leaky_relu(
           # nn_ops.xw_plus_b(encoder_state['enc'], disc_w1, disc_b1)), disc_w2, disc_b2)
       # disc_trans = nn_ops.xw_plus_b(nn_ops.leaky_relu(
@@ -1502,7 +1510,7 @@ def model_with_buckets(encoder_inputs,
                     weights[:bucket[1]],
                     softmax_loss_function=softmax_loss_function)]
             if seq3gan:
-              loss.append(disc_true - disc_false)
+              loss.append(1e-2 * (- encoder_state['true'] + encoder_state['false']))
             loss = math_ops.reduce_sum(
                 array_ops.concat([array_ops.reshape(e, [-1, 1]) for e in loss], 1), [1])
           else:
@@ -1526,7 +1534,7 @@ def model_with_buckets(encoder_inputs,
                     weights[:bucket[1]],
                     softmax_loss_function=softmax_loss_function)]
             if seq3gan:
-              loss.append(math_ops.reduce_mean(disc_true - disc_false))
+              loss.append(math_ops.reduce_mean(1e-2 * (- encoder_state['true'] + encoder_state['false'])))
             loss = math_ops.reduce_sum(loss)
           else:
             loss = sequence_loss(
